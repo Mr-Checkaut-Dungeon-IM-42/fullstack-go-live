@@ -27,7 +27,7 @@ func getUsers(db *sql.DB) http.HandlerFunc {
 
 		users := []User{}
 		for rows.Next() {
-			var user User 
+			var user User
 			if err := rows.Scan(&user.Id, &user.Name, &user.Email); err != nil {
 				log.Fatal(err)
 			}
@@ -43,13 +43,13 @@ func getUsers(db *sql.DB) http.HandlerFunc {
 
 func createUser(db *sql.DB) http.HandlerFunc {
 	return func(res http.ResponseWriter, req *http.Request) {
-		var user User 
+		var user User
 		if err := json.NewDecoder(req.Body).Decode(&user); err != nil {
 			log.Fatal(err)
 		}
 
-		err := db.QueryRow("INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id", 
-		user.Name, user.Email).Scan(&user.Id)
+		err := db.QueryRow("INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id",
+			user.Name, user.Email).Scan(&user.Id)
 
 		if err != nil {
 			log.Fatal(err)
@@ -61,7 +61,7 @@ func createUser(db *sql.DB) http.HandlerFunc {
 
 func updateUser(db *sql.DB) http.HandlerFunc {
 	return func(res http.ResponseWriter, req *http.Request) {
-		var user User 
+		var user User
 		if err := json.NewDecoder(req.Body).Decode(&user); err != nil {
 			log.Fatal(err)
 		}
@@ -84,28 +84,65 @@ func updateUser(db *sql.DB) http.HandlerFunc {
 	}
 }
 
+func getUser(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		id := vars["id"]
+
+		var u User
+		err := db.QueryRow("SELECT * FROM users WHERE id = $1", id).Scan(&u.Id, &u.Name, &u.Email)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		json.NewEncoder(w).Encode(u)
+	}
+}
+
+func deleteUser(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		id := vars["id"]
+
+		var u User
+		err := db.QueryRow("SELECT * FROM users WHERE id = $1", id).Scan(&u.Id, &u.Name, &u.Email)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		} else {
+			_, err := db.Exec("DELETE FROM users WHERE id = $1", id)
+			if err != nil {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+
+			json.NewEncoder(w).Encode("User deleted")
+		}
+	}
+}
+
 func main() {
 	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
-	
+
 	_, err = db.Exec("CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, name TEXT, email TEXT)")
 	if err != nil {
 		log.Fatal(err)
 	}
-	
-	// now err, because none of this func exists yet
+
 	router := mux.NewRouter()
 	router.HandleFunc("/api/go/users", getUsers(db)).Methods("GET")
 	router.HandleFunc("/api/go/users", createUser(db)).Methods("POST")
-	// router.HandleFunc("/api/go/users/{id}", getUser(db)).Methods("GET")
+	router.HandleFunc("/api/go/users/{id}", getUser(db)).Methods("GET")
 	router.HandleFunc("/api/go/users/{id}", updateUser(db)).Methods("PUT")
-	// router.HandleFunc("/api/go/users/{id}", deleteUser(db)).Methods("DELETE")
-	
+	router.HandleFunc("/api/go/users/{id}", deleteUser(db)).Methods("DELETE")
+
 	enhancedRouter := enableCORS(jsonContentTypeMiddleware(router))
-	
+
 	log.Fatal(http.ListenAndServe(":8000", enhancedRouter))
 }
 
