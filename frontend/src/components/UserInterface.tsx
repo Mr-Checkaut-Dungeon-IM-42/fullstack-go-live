@@ -17,6 +17,7 @@ const UserInterface: React.FC<UserInterfaceProps> = ({ backendName }) => {
   const [users, setUsers] = useState<User[]>([]);
   const [newUser, setNewUser] = useState({ name: "", email: "" });
   const [updateUser, setUpdateUser] = useState({ id: "", name: "", email: "" });
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const backgroundColors: { [key: string]: string } = {
     go: "bg-cyan-500",
@@ -26,12 +27,8 @@ const UserInterface: React.FC<UserInterfaceProps> = ({ backendName }) => {
     go: "bg-cyan-700 hover:bg-cyan-600",
   };
 
-  const bgColor =
-    backgroundColors[backendName as keyof typeof backgroundColors] ||
-    "bg-gray-200";
-  const btnColor =
-    buttonColors[backendName as keyof typeof buttonColors] ||
-    "bg-gray-500 hover:bg-gray-600";
+  const bgColor = backgroundColors[backendName] || "bg-gray-200";
+  const btnColor = buttonColors[backendName] || "bg-gray-500 hover:bg-gray-600";
 
   useEffect(() => {
     const fetchData = async () => {
@@ -42,12 +39,17 @@ const UserInterface: React.FC<UserInterfaceProps> = ({ backendName }) => {
         console.error("Error fetching data:", error);
       }
     };
-
     fetchData();
   }, [backendName, apiUrl]);
 
   const createUser = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    if (!newUser.name.trim() || !newUser.email.trim()) {
+      alert("Name and email are required!");
+      return;
+    }
+    
     try {
       const response = await axios.post(
         `${apiUrl}/api/${backendName}/users`,
@@ -57,13 +59,50 @@ const UserInterface: React.FC<UserInterfaceProps> = ({ backendName }) => {
       setNewUser({ name: "", email: "" });
     } catch (error) {
       console.error("Error creating user:", error);
+      alert("Failed to create user. Please try again.");
+    }
+  };
+
+  const handleUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    if (!updateUser.name.trim() || !updateUser.email.trim()) {
+      alert("Name and email are required!");
+      return;
+    }
+    
+    try {
+      const response = await axios.put(
+        `${apiUrl}/api/${backendName}/users/${updateUser.id}`,
+        { name: updateUser.name, email: updateUser.email }
+      );
+      
+      setUsers(users.map(user => 
+        user.id === parseInt(updateUser.id) ? response.data : user
+      ));
+      
+      setUpdateUser({ id: "", name: "", email: "" });
+      setIsUpdating(false);
+    } catch (error) {
+      console.error("Error updating user:", error);
+      alert("Failed to update user. Please try again.");
+    }
+  };
+
+  const deleteUser = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this user?")) return;
+    
+    try {
+      await axios.delete(`${apiUrl}/api/${backendName}/users/${id}`);
+      setUsers(users.filter(user => user.id !== id));
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      alert("Failed to delete user. Please try again.");
     }
   };
 
   return (
-    <div
-      className={`user-interface ${bgColor} ${backendName} w-full max-w-md p-4 my-4 rounded shadow`}
-    >
+    <div className={`user-interface ${bgColor} w-full max-w-md p-4 my-4 rounded shadow`}>
       <img
         src={`/${backendName}logo.svg`}
         alt={`${backendName} Logo`}
@@ -73,23 +112,70 @@ const UserInterface: React.FC<UserInterfaceProps> = ({ backendName }) => {
         backendName.charAt(0).toUpperCase() + backendName.slice(1)
       } Backend`}</h2>
 
-      <form onSubmit={createUser} className="mb-6 p-4 bg-blue-100 rounded shadow">
-        <input
-          placeholder="Name"
-          value={newUser.name}
-          onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-          className="mb-2 w-full p-2 border border-gray-300 rounded"
-        />
-        <input
-          placeholder="Email"
-          value={newUser.email}
-          onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-          className="mb-2 w-full p-2 border border-gray-300 rounded"
-        />
-        <button type="submit" className="w-full p-2 text-white bg-blue-500 rounded hover:bg-blue-600">
-          Add User
-        </button>
-      </form>
+      {!isUpdating ? (
+        <form onSubmit={createUser} className="mb-6 p-4 bg-blue-100 rounded shadow">
+          <h3 className="text-lg font-semibold mb-2">Create New User</h3>
+          <input
+            placeholder="Name"
+            value={newUser.name}
+            onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+            className="mb-2 w-full p-2 border border-gray-300 rounded"
+            required
+          />
+          <input
+            placeholder="Email"
+            value={newUser.email}
+            onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+            className="mb-2 w-full p-2 border border-gray-300 rounded"
+            required
+            type="email"
+          />
+          <button 
+            type="submit" 
+            className={`w-full p-2 text-white ${btnColor}`}
+          >
+            Add User
+          </button>
+        </form>
+      ) : (
+        <form onSubmit={handleUpdate} className="mb-6 p-4 bg-yellow-100 rounded shadow">
+          <h3 className="text-lg font-semibold mb-2">Update User</h3>
+          <input
+            placeholder="Name"
+            value={updateUser.name}
+            onChange={(e) => setUpdateUser({ ...updateUser, name: e.target.value })}
+            className="mb-2 w-full p-2 border border-gray-300 rounded"
+            required
+          />
+          <input
+            placeholder="Email"
+            value={updateUser.email}
+            onChange={(e) => setUpdateUser({ ...updateUser, email: e.target.value })}
+            className="mb-2 w-full p-2 border border-gray-300 rounded"
+            required
+            type="email"
+          />
+          <div className="flex space-x-2">
+            <button 
+              type="submit" 
+              className="flex-1 p-2 text-white bg-yellow-500 hover:bg-yellow-600 rounded"
+            >
+              Update User
+            </button>
+            <button 
+              type="button" 
+              className="p-2 text-white bg-gray-500 hover:bg-gray-600 rounded"
+              onClick={() => {
+                setUpdateUser({ id: "", name: "", email: "" });
+                setIsUpdating(false);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
       <div className="space-y-4">
         {users.map((user) => (
           <div
@@ -97,6 +183,27 @@ const UserInterface: React.FC<UserInterfaceProps> = ({ backendName }) => {
             className="flex items-center justify-between bg-white p-4 rounded-lg shadow"
           >
             <CardComponent card={user} />
+            <div className="flex flex-col space-y-2">
+              <button
+                onClick={() => {
+                  setUpdateUser({
+                    id: user.id.toString(),
+                    name: user.name,
+                    email: user.email
+                  });
+                  setIsUpdating(true);
+                }}
+                className="px-2 py-1 text-white bg-blue-500 rounded hover:bg-blue-600"
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => deleteUser(user.id)}
+                className="px-2 py-1 text-white bg-red-500 rounded hover:bg-red-600"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         ))}
       </div>
